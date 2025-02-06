@@ -1,140 +1,156 @@
 package main
 
-import "fmt"
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+)
 
-// The exercise includes:
-
-// 1. Define basic structs for Book and User.
-// 2. Create a Library struct with methods to add books, borrow books, and return books.
-// 3. Ensure the code follows clean code principles: readability, proper naming conventions,
-// modularity, reusability, and documentation.
-
-// B represents a book-like object.
-type B struct {
-    Id     string
-    Ttl    string
-    Atr    string
+type Book struct {
+	ID, Title, Author string
 }
 
-// U represents a user-like entity.
-type U struct {
-    Id      string
-    Nme     string
-    Brrwd string
+type User struct {
+	ID, Name, Borrowed string
 }
 
-// L like Library but more confusing.
-type L struct {
-    Bks []B
-    Us []U
+type Library struct {
+	Books []Book
+	Users []User
 }
 
-// AddB places a new book into the system.
-func (lb *L) AddB(bk B) {
-    lb.Bks = append(lb.Bks, bk)
-    fmt.Printf("B added: %s\n", bk.Ttl)
+func (lib *Library) AddBook(id, title, author string) {
+	lib.Books = append(lib.Books, Book{ID: id, Title: title, Author: author})
+	fmt.Printf("Book added: %s\n", title)
 }
 
-// RemB tosses out an existing book from the collection.
-func (lb *L) RemB(id string) error {
-    for i, bk := range lb.Bks {
-        if bk.Id == id {
-            lb.Bks = append(lb.Bks[:i], lb.Bks[i+1:]...)
-            fmt.Printf("B removed: %s\n", bk.Ttl)
-            return nil
-        }
-    }
-    return fmt.Errorf("B not found")
+func (lib *Library) RemoveBook(id string) {
+	for i, book := range lib.Books {
+		if book.ID == id {
+			lib.Books = append(lib.Books[:i], lib.Books[i+1:]...)
+			fmt.Printf("Book removed: %s\n", book.Title)
+			return
+		}
+	}
+	fmt.Println("Book not found")
 }
 
-// AllB spits out books to console.
-func (lb *L) AllB() {
-    fmt.Println("Ls of B:")
-    for _, bk := range lb.Bks {
-        fmt.Printf("Id: %s, Ttl: %s, Atr: %s\n", bk.Id, bk.Ttl, bk.Atr)
-    }
+func (lib *Library) ListBooks() {
+	fmt.Println("List of Books:")
+	for _, book := range lib.Books {
+		fmt.Printf("ID: %s, Title: %s, Author: %s\n", book.ID, book.Title, book.Author)
+	}
 }
 
-// Brrw has a U borrow a B.
-func (lb *L) Brrw(uId, bId string) error {
-    uIdx, bIdx := -1, -1
-    for i := range lb.Us {
-        if lb.Us[i].Id == uId {
-            uIdx = i
-            break
-        }
-    }
-    for j := range lb.Bks {
-        if lb.Bks[j].Id == bId {
-            bIdx = j
-            break
-        }
-    }
-    if uIdx == -1 {
-        return fmt.Errorf("U not found")
-    }
-    if bIdx == -1 {
-        return fmt.Errorf("B not found")
-    }
-    if lb.Us[uIdx].Brrwd != "" {
-        return fmt.Errorf("U has a B")
-    }
-    lb.Us[uIdx].Brrwd = bId
-    fmt.Printf("B brrwd: %s by %s\n", lb.Bks[bIdx].Ttl, lb.Us[uIdx].Nme)
-    return nil
+func (lib *Library) AddUser(id, name string) {
+	lib.Users = append(lib.Users, User{ID: id, Name: name})
+	fmt.Printf("User added: %s\n", name)
 }
 
-// Rtrn returns borrowed B from U.
-func (lb *L) Rtrn(uId, bId string) error {
-    uPointer := lb.us(uId)
-    if uPointer == nil {
-        return fmt.Errorf("U not found")
-    }
-    if uPointer.Brrwd != bId {
-        return fmt.Errorf("Mismatch! Cannot return.")
-    }
-    uPointer.Brrwd = ""
-    fmt.Printf("B rtrnd: %s by %s\n", bId, uPointer.Nme)
-    return nil
+func (lib *Library) BorrowBook(userID, bookID string) {
+	user, err := lib.findUser(userID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	book, err := lib.findBook(bookID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if user.Borrowed != "" {
+		fmt.Println("User already has a borrowed book")
+		return
+	}
+	user.Borrowed = book.ID
+	fmt.Printf("Book borrowed: %s by %s\n", book.Title, user.Name)
 }
 
-// AllU showers the world with U info.
-func (lb *L) AllU() {
-    fmt.Println("Us in sys:")
-    for _, u := range lb.Us {
-        br := "N/A"
-        if u.Brrwd != "" {
-            br = u.Brrwd
-        }
-        fmt.Printf("Id: %s, Nme: %s, Brrwd Id: %s\n", u.Id, u.Nme, br)
-    }
+func (lib *Library) ReturnBook(userID, bookID string) {
+	user, err := lib.findUser(userID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if user.Borrowed != bookID {
+		fmt.Println("Mismatch: User did not borrow this book")
+		return
+	}
+	user.Borrowed = ""
+	fmt.Printf("Book returned: %s by %s\n", bookID, user.Name)
 }
 
-func (lb *L) us(id string) *U {
-    for i := range lb.Us {
-        if lb.Us[i].Id == id {
-            return &lb.Us[i]
-        }
-    }
-    return nil
+func (lib *Library) ListUsers() {
+	fmt.Println("Users in the system:")
+	for _, user := range lib.Users {
+		borrowed := "None"
+		if user.Borrowed != "" {
+			borrowed = user.Borrowed
+		}
+		fmt.Printf("ID: %s, Name: %s, Borrowed Book ID: %s\n", user.ID, user.Name, borrowed)
+	}
+}
+
+func (lib *Library) findUser(id string) (*User, error) {
+	for i := range lib.Users {
+		if lib.Users[i].ID == id {
+			return &lib.Users[i], nil
+		}
+	}
+	return nil, errors.New("user not found")
+}
+
+func (lib *Library) findBook(id string) (*Book, error) {
+	for i := range lib.Books {
+		if lib.Books[i].ID == id {
+			return &lib.Books[i], nil
+		}
+	}
+	return nil, errors.New("book not found")
+}
+
+func getUserInput(prompt string) string {
+	fmt.Print(prompt + " ")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
 }
 
 func main() {
-    l := L{}
-    b1 := B{Id: "1", Ttl: "Unclear Code", Atr: "Random Author"}
-    u1 := U{Id: "1", Nme: "Sample Person"}
-    l.AddB(b1)
-    l.Us = append(l.Us, u1)
-    l.AllB()
-    err := l.Brrw("1", "1")
-    if err != nil {
-        fmt.Println("Error:", err)
-    }
-    l.AllU()
-    err = l.Rtrn("1", "1")
-    if err != nil {
-        fmt.Println("Error:", err)
-    }
-    l.RemB("1")
-    l.AllB()
+	library := Library{}
+	for {
+		fmt.Println("\nLibrary Menu:")
+		fmt.Println("1. Add Book")
+		fmt.Println("2. Remove Book")
+		fmt.Println("3. List Books")
+		fmt.Println("4. Add User")
+		fmt.Println("5. Borrow Book")
+		fmt.Println("6. Return Book")
+		fmt.Println("7. List Users")
+		fmt.Println("8. Exit")
+
+		switch getUserInput("Enter your choice:") {
+		case "1":
+			library.AddBook(getUserInput("Enter Book ID:"), getUserInput("Enter Book Title:"), getUserInput("Enter Author Name:"))
+		case "2":
+			library.RemoveBook(getUserInput("Enter Book ID to remove:"))
+		case "3":
+			library.ListBooks()
+		case "4":
+			library.AddUser(getUserInput("Enter User ID:"), getUserInput("Enter User Name:"))
+		case "5":
+			library.BorrowBook(getUserInput("Enter User ID:"), getUserInput("Enter Book ID to borrow:"))
+		case "6":
+			library.ReturnBook(getUserInput("Enter User ID:"), getUserInput("Enter Book ID to return:"))
+		case "7":
+			library.ListUsers()
+		case "8":
+			fmt.Println("Exiting Library System.")
+			return
+		default:
+			fmt.Println("Invalid choice. Please try again.")
+		}
+	}
 }
